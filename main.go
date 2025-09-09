@@ -20,10 +20,10 @@ func main() {
 	fileServer := http.StripPrefix("/app/", http.FileServer(http.Dir(rootPath)))
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", handlerReadiness)
+	mux.HandleFunc("GET /healthz", handlerReadiness)
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(fileServer))
-	mux.HandleFunc("/metrics", apiCfg.handlerMetrics)
-	mux.HandleFunc("/reset", apiCfg.handlerReset)
+	mux.HandleFunc("GET /metrics", apiCfg.handlerMetrics)
+	mux.HandleFunc("POST /reset", apiCfg.handlerReset)
 
 	server := &http.Server{
 		Addr:    ":" + port,
