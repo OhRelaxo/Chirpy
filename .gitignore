@@ -33,3 +33,4 @@ go.work.sum
 
 Chirpy
 Chirpy.code-workspace
+.env
