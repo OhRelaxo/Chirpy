@@ -16,30 +16,44 @@ import (
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
+	devMode        bool
 }
 
 func main() {
+	const port = "8080"
+	const rootPath = "."
+
 	godotenv.Load()
+
+	devMode := false
+	if dev := os.Getenv("PLATFORM"); dev == "Dev" {
+		devMode = true
+	}
+
 	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 	dbQueries := database.New(db)
 
-	const port = "8080"
-	const rootPath = "."
-
-	apiCfg := apiConfig{fileserverHits: atomic.Int32{}, db: dbQueries}
-
-	fileServer := http.StripPrefix("/app/", http.FileServer(http.Dir(rootPath)))
+	apiCfg := apiConfig{fileserverHits: atomic.Int32{}, db: dbQueries, devMode: devMode}
 
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+
+	fileServer := http.StripPrefix("/app/", http.FileServer(http.Dir(rootPath)))
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(fileServer))
+
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
-	mux.Handle("POST /api/validate_chirp", apiCfg.middlewareMetricsInc(http.HandlerFunc(handlerValidateChirp)))
+
+	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
+	mux.HandleFunc("POST /api/users", apiCfg.handlerCreateUser)
 
 	server := &http.Server{
 		Addr:    ":" + port,
@@ -79,13 +93,22 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func (cfg *apiConfig) handlerReset(w http.ResponseWriter, _ *http.Request) {
+func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
+	if !cfg.devMode {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
 	log.Println("Resetting Hits")
 	cfg.fileserverHits.Store(int32(0))
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, err := w.Write([]byte(http.StatusText(http.StatusOK)))
-	if err != nil {
-		log.Printf("error in <middlewareMetricsReset> at w.Write: %v", err)
+
+	if err := cfg.db.ResetUsers(r.Context()); err != nil {
+		log.Printf("error in <handlerReset> at db.ResetUsers: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(http.StatusText(http.StatusOK)))
 }

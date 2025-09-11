@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 )
@@ -24,5 +25,15 @@ func jsonResp(code int, w http.ResponseWriter, payload any) {
 	}
 	w.WriteHeader(code)
 	w.Write(rawJson)
+}
 
+func jsonUnmarshal(r *http.Request, parameters any) error {
+	defer r.Body.Close()
+	req, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("error in <jsonUnmarshal> at io.ReadAll: %v", err)
+		return err
+	}
+	json.Unmarshal(req, &parameters)
+	return nil
 }
