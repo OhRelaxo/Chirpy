@@ -22,7 +22,10 @@ func main() {
 	const port = "8080"
 	const rootPath = "."
 
-	godotenv.Load()
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("error while loading .env: %v", err)
+	}
 
 	devMode := false
 	if dev := os.Getenv("PLATFORM"); dev == "Dev" {
@@ -51,7 +54,7 @@ func main() {
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 
-	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
+	mux.HandleFunc("POST /api/chirps", apiCfg.handlerChirps)
 	mux.HandleFunc("POST /api/users", apiCfg.handlerCreateUser)
 
 	server := &http.Server{

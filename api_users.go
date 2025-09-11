@@ -16,18 +16,15 @@ type User struct {
 	Email     string    `json:"email"`
 }
 
-func (c *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Email string `json:"email"`
 	}
 	var params parameters
-	err := jsonUnmarshal(r, &params)
-	if err != nil {
-		log.Printf("error in <handlerCreateUser>: %v", err)
-		jsonErrorResp(500, "internal server error", w)
+	if err := jsonDecoder(r, &params, w); err != nil {
 		return
 	}
-	dbUser, err := c.db.CreateUser(context.Background(), params.Email)
+	dbUser, err := cfg.db.CreateUser(context.Background(), params.Email)
 	if err != nil {
 		log.Printf("error in <handlerCreateUser>: %v", err)
 		jsonErrorResp(500, "internal server error", w)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 )
@@ -24,16 +23,19 @@ func jsonResp(code int, w http.ResponseWriter, payload any) {
 		return
 	}
 	w.WriteHeader(code)
-	w.Write(rawJson)
+	_, err = w.Write(rawJson)
+	if err != nil {
+		return
+	}
 }
 
-func jsonUnmarshal(r *http.Request, parameters any) error {
-	defer r.Body.Close()
-	req, err := io.ReadAll(r.Body)
+func jsonDecoder(r *http.Request, params any, w http.ResponseWriter) error {
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&params)
 	if err != nil {
-		log.Printf("error in <jsonUnmarshal> at io.ReadAll: %v", err)
+		log.Printf("error in <jsonDecoder>: at decoder.Decode: %v", err)
+		jsonErrorResp(500, "internal server error", w)
 		return err
 	}
-	json.Unmarshal(req, &parameters)
 	return nil
 }
