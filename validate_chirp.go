@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 )
 
 func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Body string `json:"body"`
+	}
+	type returnVals struct {
+		CleanedBody string `json:"cleaned_body"`
 	}
 
 	params := parameters{}
@@ -30,5 +34,20 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 		jsonErrorResp(400, "Body too long or wrong parameter war used", w)
 		return
 	}
-	jsonResp(200, w, jsonValid{Valid: true})
+
+	badWords := map[string]struct{}{
+		"kerfuffle": {},
+		"sharbert":  {},
+		"fornax":    {},
+	}
+
+	reqString := strings.Fields(params.Body)
+	for i, s := range reqString {
+		if _, ok := badWords[strings.ToLower(s)]; ok {
+			reqString[i] = "****"
+		}
+	}
+	resString := strings.Join(reqString, " ")
+
+	jsonResp(200, w, returnVals{CleanedBody: resString})
 }

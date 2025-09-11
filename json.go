@@ -6,15 +6,10 @@ import (
 	"net/http"
 )
 
-type jsonError struct {
-	Error string `json:"error"`
-}
-
-type jsonValid struct {
-	Valid bool `json:"valid"`
-}
-
 func jsonErrorResp(code int, msg string, w http.ResponseWriter) {
+	type jsonError struct {
+		Error string `json:"error"`
+	}
 	log.Printf("Responding with %v error: %v", code, msg)
 	jsonResp(code, w, jsonError{Error: msg})
 }
