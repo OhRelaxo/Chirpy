@@ -14,7 +14,7 @@ func jsonErrorResp(code int, msg string, w http.ResponseWriter) {
 	jsonResp(code, w, jsonError{Error: msg})
 }
 
-func jsonResp(code int, w http.ResponseWriter, payload interface{}) {
+func jsonResp(code int, w http.ResponseWriter, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	rawJson, err := json.Marshal(payload)
 	if err != nil {
