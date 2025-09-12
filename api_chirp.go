@@ -102,3 +102,33 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResp(http.StatusOK, w, chirps)
 }
+
+func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	pathValue := r.PathValue("chirpID")
+	log.Println(pathValue)
+
+	chirpID, err := uuid.Parse(pathValue)
+	if err != nil {
+		log.Printf("error in <handlerGetChirp> at uuid.Parse: %v", err)
+		jsonErrorResp(http.StatusNotFound, "please use a valid uuid", w)
+		return
+	}
+
+	dbChirp, err := cfg.db.GetChirp(r.Context(), chirpID)
+	if err != nil {
+		log.Printf("error in <handlerGetChirp> at db.GetChirp: %v", err)
+		jsonErrorResp(http.StatusNotFound, "please use a valid chirp id", w)
+		return
+	}
+
+	chirp := Chirp{
+		Id:        dbChirp.ID,
+		CreatedAt: dbChirp.CreatedAt,
+		UpdatedAt: dbChirp.UpdatedAt,
+		Body:      dbChirp.Body,
+		UserId:    dbChirp.UserID,
+	}
+
+	jsonResp(http.StatusOK, w, chirp)
+}
