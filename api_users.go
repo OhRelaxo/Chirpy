@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -15,6 +16,7 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token     string    `json:"token,omitempty"`
 }
 
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -46,8 +48,9 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	type parameters struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		ExpiresInSeconds *int   `json:"expires_in_seconds,omitempty"`
 	}
 	params := parameters{}
 	if err := jsonDecoder(r, &params, w); err != nil {
@@ -64,10 +67,38 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		jsonErrorResp(http.StatusUnauthorized, "Incorrect email or password", w)
 		return
 	}
+
+	var expIn time.Duration
+	defaultDuration, err := time.ParseDuration("1h")
+	if err != nil {
+		fmt.Printf("error in <handlerLogin> at time.ParseDuration: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+		return
+	}
+
+	if params.ExpiresInSeconds == nil || *params.ExpiresInSeconds > 3600 {
+		expIn = defaultDuration
+	} else {
+		expIn, err = time.ParseDuration(fmt.Sprint(params.ExpiresInSeconds))
+		if err != nil {
+			fmt.Printf("error in <handlerLogin> at time.ParseDuration: %v", err)
+			jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+			return
+		}
+	}
+
+	token, err := auth.MakeJWT(dbUser.ID, cfg.secret, expIn)
+	if err != nil {
+		log.Printf("error in <handlerLogin at auth.MakeJWT: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+		return
+	}
+
 	jsonResp(http.StatusOK, w, User{
 		ID:        dbUser.ID,
 		CreatedAt: dbUser.CreatedAt,
 		UpdatedAt: dbUser.UpdatedAt,
 		Email:     dbUser.Email,
+		Token:     token,
 	})
 }

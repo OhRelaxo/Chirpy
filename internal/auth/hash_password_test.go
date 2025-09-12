@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -105,6 +106,55 @@ func TestValidateJWT(t *testing.T) {
 			}
 			if gotUserID != tt.wantUserID {
 				t.Errorf("ValidateJWT() gotUserID = %v, want %v", gotUserID, tt.wantUserID)
+			}
+		})
+	}
+}
+
+func TestGetBearerToken(t *testing.T) {
+	headerOne := http.Header{}
+	headerOne.Set("Authorization", "Bearer secret")
+	headerTwo := http.Header{}
+	headerTwo.Set("Authorization", "Baerar secret")
+	headerThree := http.Header{}
+	headerThree.Set("Authorization", "Bearer_secret")
+	want := "secret"
+
+	tests := []struct {
+		name    string
+		header  http.Header
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "valid header",
+			header:  headerOne,
+			want:    want,
+			wantErr: false,
+		},
+		{
+			name:    "invalid header one",
+			header:  headerTwo,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid header two",
+			header:  headerThree,
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			token, err := GetBearerToken(tt.header)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetBearerToken() err = %v, wantErr = %v", err, tt.wantErr)
+				return
+			}
+			if token != tt.want {
+				t.Errorf("GetBearerToken() token = %v, want = %v", token, tt.want)
 			}
 		})
 	}

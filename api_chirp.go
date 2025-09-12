@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OhRelaxo/Chirpy/internal/auth"
 	"github.com/OhRelaxo/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -23,12 +24,24 @@ func (cfg *apiConfig) handlerPostChirps(w http.ResponseWriter, r *http.Request) 
 	defer r.Body.Close()
 	log.Println("creating Chirp")
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserId uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	params := parameters{}
 	if err := jsonDecoder(r, &params, w); err != nil {
+		return
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("failed fetching token at <handlerPostChirps>: %v", err)
+		jsonErrorResp(http.StatusUnauthorized, "you have no authorization", w)
+		return
+	}
+	authUserId, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		log.Printf("failed validating at <handlerPostChirps>: %v", err)
+		jsonErrorResp(http.StatusUnauthorized, "go away you are not authorized to be here", w)
 		return
 	}
 
@@ -40,7 +53,7 @@ func (cfg *apiConfig) handlerPostChirps(w http.ResponseWriter, r *http.Request) 
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   body,
-		UserID: params.UserId,
+		UserID: authUserId,
 	})
 	if err != nil {
 		log.Printf("error in <handlerPostChirps> at db.CreateChirp: %v", err)

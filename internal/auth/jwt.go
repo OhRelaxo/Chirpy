@@ -1,8 +1,10 @@
 package auth
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -12,13 +14,12 @@ import (
 func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
 	sUserId := fmt.Sprint(userID)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Issuer:    "Chirpy",
+		Issuer:    "chirpy",
 		IssuedAt:  &jwt.NumericDate{Time: time.Now().UTC()},
 		ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(expiresIn)},
 		Subject:   sUserId,
 	})
-	buffTokenSecret := bytes.NewBufferString(tokenSecret)
-	signedToken, err := token.SignedString(buffTokenSecret.Bytes())
+	signedToken, err := token.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return "", err
 	}
@@ -30,15 +31,33 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 		return []byte(tokenSecret), nil
 	})
 	if err != nil {
-		return [16]byte{}, err
+		return uuid.Nil, err
 	}
+
 	id, err := token.Claims.GetSubject()
 	if err != nil {
-		return [16]byte{}, err
+		return uuid.Nil, err
+	}
+
+	issuer, err := token.Claims.GetIssuer()
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if issuer != "chirpy" {
+		return uuid.Nil, errors.New("invalid issuer")
 	}
 	userId, err := uuid.Parse(id)
 	if err != nil {
-		return [16]byte{}, err
+		return uuid.Nil, err
 	}
 	return userId, nil
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	authStr := headers.Get("Authorization")
+	after, found := strings.CutPrefix(authStr, "Bearer ")
+	if !found {
+		return "", errors.New("no prefix \"Bearer \" found")
+	}
+	return after, nil
 }
