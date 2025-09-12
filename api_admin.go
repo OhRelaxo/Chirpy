@@ -26,6 +26,7 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
 	if !cfg.devMode {
 		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
