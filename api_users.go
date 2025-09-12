@@ -1,11 +1,12 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/OhRelaxo/Chirpy/internal/auth"
+	"github.com/OhRelaxo/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -19,13 +20,19 @@ type User struct {
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	type parameters struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	var params parameters
 	if err := jsonDecoder(r, &params, w); err != nil {
 		return
 	}
-	dbUser, err := cfg.db.CreateUser(context.Background(), params.Email)
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+		return
+	}
+	dbUser, err := cfg.db.CreateUser(r.Context(), database.CreateUserParams{Email: params.Email, HashedPassword: hashedPassword})
 	if err != nil {
 		log.Printf("error in <handlerCreateUser>: %v", err)
 		jsonErrorResp(500, "internal server error", w)
@@ -34,4 +41,33 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 	resUser := User{ID: dbUser.ID, CreatedAt: dbUser.CreatedAt, UpdatedAt: dbUser.UpdatedAt, Email: dbUser.Email}
 
 	jsonResp(201, w, resUser)
+}
+
+func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	params := parameters{}
+	if err := jsonDecoder(r, &params, w); err != nil {
+		return
+	}
+	dbUser, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
+	if err != nil {
+		log.Printf("email not found in <handlerLogin>")
+		jsonErrorResp(http.StatusUnauthorized, "Incorrect email or password", w)
+		return
+	}
+	if err = auth.CheckPasswordHash(params.Password, dbUser.HashedPassword); err != nil {
+		log.Printf("wrong password in <handlerLogin>")
+		jsonErrorResp(http.StatusUnauthorized, "Incorrect email or password", w)
+		return
+	}
+	jsonResp(http.StatusOK, w, User{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+	})
 }
