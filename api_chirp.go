@@ -35,13 +35,13 @@ func (cfg *apiConfig) handlerPostChirps(w http.ResponseWriter, r *http.Request) 
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		log.Printf("failed fetching token at <handlerPostChirps>: %v", err)
-		jsonErrorResp(http.StatusUnauthorized, "you have no authorization", w)
+		jsonErrorResp(http.StatusUnauthorized, "Couldn't find JWT", w)
 		return
 	}
 	authUserId, err := auth.ValidateJWT(token, cfg.secret)
 	if err != nil {
 		log.Printf("failed validating at <handlerPostChirps>: %v", err)
-		jsonErrorResp(http.StatusUnauthorized, "go away you are not authorized to be here", w)
+		jsonErrorResp(http.StatusUnauthorized, "Couldn't validate JWT", w)
 		return
 	}
 

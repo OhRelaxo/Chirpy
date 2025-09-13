@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -12,11 +11,12 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token,omitempty"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token,omitempty"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
 }
 
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -48,57 +48,69 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	type parameters struct {
-		Email            string `json:"email"`
-		Password         string `json:"password"`
-		ExpiresInSeconds *int   `json:"expires_in_seconds,omitempty"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	params := parameters{}
 	if err := jsonDecoder(r, &params, w); err != nil {
 		return
 	}
+
 	dbUser, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
 		log.Printf("email not found in <handlerLogin>")
 		jsonErrorResp(http.StatusUnauthorized, "Incorrect email or password", w)
 		return
 	}
+
 	if err = auth.CheckPasswordHash(params.Password, dbUser.HashedPassword); err != nil {
 		log.Printf("wrong password in <handlerLogin>")
 		jsonErrorResp(http.StatusUnauthorized, "Incorrect email or password", w)
 		return
 	}
 
-	var expIn time.Duration
-	defaultDuration, err := time.ParseDuration("1h")
+	expInJWT, err := time.ParseDuration("1h")
 	if err != nil {
-		fmt.Printf("error in <handlerLogin> at time.ParseDuration: %v", err)
+		log.Printf("error in <handlerLogin> at time.ParseDuration: %v", err)
 		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
 		return
 	}
 
-	if params.ExpiresInSeconds == nil || *params.ExpiresInSeconds > 3600 {
-		expIn = defaultDuration
-	} else {
-		expIn, err = time.ParseDuration(fmt.Sprint(params.ExpiresInSeconds))
-		if err != nil {
-			fmt.Printf("error in <handlerLogin> at time.ParseDuration: %v", err)
-			jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
-			return
-		}
-	}
-
-	token, err := auth.MakeJWT(dbUser.ID, cfg.secret, expIn)
+	token, err := auth.MakeJWT(dbUser.ID, cfg.secret, expInJWT)
 	if err != nil {
 		log.Printf("error in <handlerLogin at auth.MakeJWT: %v", err)
 		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
 		return
 	}
 
+	refreshDur, err := time.ParseDuration("1440h")
+	if err != nil {
+		log.Printf("error in <handlerLogin> at time.ParseDuration: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+		return
+	}
+	expInRef := time.Now().Add(refreshDur)
+
+	refTokenStr, err := auth.MakeRefreshToken()
+	if err != nil {
+		log.Printf("error in <handlerLogin> at auth.MakeRefreshToken: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+		return
+	}
+
+	_, err = cfg.db.CreateToken(r.Context(), database.CreateTokenParams{refTokenStr, dbUser.ID, expInRef})
+	if err != nil {
+		log.Printf("error in <handlerLogin> at db.CreateToken: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+		return
+	}
+
 	jsonResp(http.StatusOK, w, User{
-		ID:        dbUser.ID,
-		CreatedAt: dbUser.CreatedAt,
-		UpdatedAt: dbUser.UpdatedAt,
-		Email:     dbUser.Email,
-		Token:     token,
+		ID:           dbUser.ID,
+		CreatedAt:    dbUser.CreatedAt,
+		UpdatedAt:    dbUser.UpdatedAt,
+		Email:        dbUser.Email,
+		Token:        token,
+		RefreshToken: refTokenStr,
 	})
 }
