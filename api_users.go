@@ -117,6 +117,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) handlerUpdateLoginDetails(w http.ResponseWriter, r *http.Request) {
 	log.Println("updating login details")
+	defer r.Body.Close()
 	type parameters struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
