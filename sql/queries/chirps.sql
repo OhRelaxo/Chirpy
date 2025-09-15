@@ -13,6 +13,10 @@ returning *;
 select * from chirps
 order by created_at;
 
--- name: GetChirp :one
+-- name: GetChirpByID :one
 select * from chirps
+where id = $1;
+
+-- name: DeleteChirpByID :exec
+delete from chirps
 where id = $1;

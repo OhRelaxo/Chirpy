@@ -114,3 +114,54 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: refTokenStr,
 	})
 }
+
+func (cfg *apiConfig) handlerUpdateLoginDetails(w http.ResponseWriter, r *http.Request) {
+	log.Println("updating login details")
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("error in <handlerUpdateLoginDetails> at auth.GetBearerToken: %v", err)
+		jsonErrorResp(http.StatusUnauthorized, "unable to fetch Bearer Token", w)
+		return
+	}
+
+	userId, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		log.Printf("error in <handlerUpdateLoginDetails> at auth.ValidateJWT: %v", err)
+		jsonErrorResp(http.StatusUnauthorized, "failed to validated JWT", w)
+		return
+	}
+
+	params := parameters{}
+	err = jsonDecoder(r, &params, w)
+	if err != nil {
+		log.Printf("error in <handlerUpdateLoginDetails> at jsonDecoder: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "failed to decode json", w)
+		return
+	}
+
+	hashPass, err := auth.HashPassword(params.Password)
+	if err != nil {
+		log.Printf("error in <handlerUpdateLoginDetails> at auth.HashPassword: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "failed to hash password", w)
+		return
+	}
+
+	dbUser, err := cfg.db.UpdateLoginDetails(r.Context(), database.UpdateLoginDetailsParams{Email: params.Email, HashedPassword: hashPass, ID: userId})
+	if err != nil {
+		log.Printf("error in <handlerUpdateLoginDetails> at db.UpdateLoginDetails: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "failed to updated database", w)
+		return
+	}
+
+	jsonResp(http.StatusOK, w, User{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+	})
+}

@@ -63,13 +63,5 @@ func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
 		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
 		return
 	}
-
-	emptyResp := make([]byte, 0)
 	w.WriteHeader(http.StatusNoContent)
-	_, err = w.Write(emptyResp)
-	if err != nil {
-		log.Printf("error in <handlerRevoke> at w.Write: %v", err)
-		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
-		return
-	}
 }

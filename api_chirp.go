@@ -100,6 +100,7 @@ func validChirp(body string, w http.ResponseWriter) error {
 }
 
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	log.Println("Getting Chirps")
 	defer r.Body.Close()
 
 	chirps := make([]Chirp, 0)
@@ -117,9 +118,9 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
+	log.Println("Getting a Chirp")
 	defer r.Body.Close()
 	pathValue := r.PathValue("chirpID")
-	log.Println(pathValue)
 
 	chirpID, err := uuid.Parse(pathValue)
 	if err != nil {
@@ -128,9 +129,9 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbChirp, err := cfg.db.GetChirp(r.Context(), chirpID)
+	dbChirp, err := cfg.db.GetChirpByID(r.Context(), chirpID)
 	if err != nil {
-		log.Printf("error in <handlerGetChirp> at db.GetChirp: %v", err)
+		log.Printf("error in <handlerGetChirp> at db.GetChirpByID: %v", err)
 		jsonErrorResp(http.StatusNotFound, "please use a valid chirp id", w)
 		return
 	}
@@ -144,4 +145,52 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResp(http.StatusOK, w, chirp)
+}
+
+func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	log.Println("deleting chirp")
+
+	pathValue := r.PathValue("chirpID")
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("error in <handlerDeleteChirp> at auth.GetBearerToken: %v", err)
+		jsonErrorResp(http.StatusUnauthorized, "unable to fetch Bearer Token", w)
+		return
+	}
+
+	userId, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		log.Printf("error in <handlerDeleteChirp> at auth.ValidateJWT: %v", err)
+		jsonErrorResp(http.StatusUnauthorized, "failed to validated JWT", w)
+		return
+	}
+
+	chirpId, err := uuid.Parse(pathValue)
+	if err != nil {
+		log.Printf("error in <handlerDeleteChirp> at uuid.Parse: %v", err)
+		jsonErrorResp(http.StatusBadRequest, "unable to parse uuid", w)
+		return
+	}
+	dbChirp, err := cfg.db.GetChirpByID(r.Context(), chirpId)
+	if err != nil {
+		log.Printf("error in <handlerDeleteChirp> at db.GetChirpByID: %v", err)
+		jsonErrorResp(http.StatusNotFound, "chirp with the given id was not found", w)
+		return
+	}
+
+	if dbChirp.UserID != userId {
+		log.Println("error in <handlerDeleteChirp> user does not own chirp")
+		jsonErrorResp(http.StatusForbidden, "user does not own chirp", w)
+		return
+	}
+
+	err = cfg.db.DeleteChirpByID(r.Context(), dbChirp.ID)
+	if err != nil {
+		log.Printf("error in <handlerDeleteChirp> at db.DeleteChirpByID: %v", err)
+		jsonErrorResp(http.StatusInternalServerError, "failed to delete chirp in database", w)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
