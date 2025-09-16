@@ -21,3 +21,8 @@ update users
 set updated_at = NOW(), email = $1, hashed_password = $2
 where id = $3
 returning *;
+
+-- name: UpgradeToChirpyRed :exec
+update users
+set is_chirpy_red = true
+where id = $1;
