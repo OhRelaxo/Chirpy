@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -103,18 +104,51 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	log.Println("Getting Chirps")
 	defer r.Body.Close()
 
+	authorIdStr := r.URL.Query().Get("author_id")
+	sortedBy := r.URL.Query().Get("sort")
+
 	chirps := make([]Chirp, 0)
-	dbChirps, err := cfg.db.GetChirps(r.Context())
-	if err != nil {
-		log.Printf("error in <handlerGetChirps> at db.GetChirps: %v", err)
-		jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
-		return
+
+	if authorIdStr != "" {
+		authorId, err := uuid.Parse(authorIdStr)
+		if err != nil {
+			log.Printf("error in <hanlderGetChirps> at uuid.Parse: %v", err)
+			jsonErrorResp(http.StatusBadRequest, "please use a correct uuid as the author_id", w)
+			return
+		}
+		dbChirps, err := cfg.db.GetChirpsByUserID(r.Context(), authorId)
+		if err != nil {
+			log.Printf("error in <handlerGetChirps> at db.GetChirps: %v", err)
+			jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+			return
+		}
+		chirps = rearrangeChirps(dbChirps)
+	} else {
+		dbChirps, err := cfg.db.GetChirps(r.Context())
+		if err != nil {
+			log.Printf("error in <handlerGetChirps> at db.GetChirps: %v", err)
+			jsonErrorResp(http.StatusInternalServerError, "internal server error", w)
+			return
+		}
+		chirps = rearrangeChirps(dbChirps)
 	}
+
+	if sortedBy == "desc" {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		})
+	}
+
+	jsonResp(http.StatusOK, w, chirps)
+}
+
+func rearrangeChirps(dbChirps []database.Chirp) []Chirp {
+	var chirps []Chirp
 	for _, dbChirp := range dbChirps {
 		c := Chirp{Id: dbChirp.ID, CreatedAt: dbChirp.CreatedAt, UpdatedAt: dbChirp.UpdatedAt, Body: dbChirp.Body, UserId: dbChirp.UserID}
 		chirps = append(chirps, c)
 	}
-	jsonResp(http.StatusOK, w, chirps)
+	return chirps
 }
 
 func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {

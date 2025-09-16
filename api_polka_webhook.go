@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/OhRelaxo/Chirpy/internal/auth"
 	"github.com/google/uuid"
 )
 
@@ -17,8 +18,19 @@ func (cfg *apiConfig) handlerPolkaWebhook(w http.ResponseWriter, r *http.Request
 		} `json:"data"`
 	}
 
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		log.Printf("error in <handlerPolkaWebhook> at auth.GetAPIKey: %v", err)
+		jsonErrorResp(http.StatusUnauthorized, "no prefix \"ApiKey \" was found in the header", w)
+		return
+	}
+	if apiKey != cfg.polkaKey {
+		jsonErrorResp(http.StatusForbidden, "wrong key", w)
+		return
+	}
+
 	params := parameters{}
-	err := jsonDecoder(r, &params, w)
+	err = jsonDecoder(r, &params, w)
 	if err != nil {
 		log.Printf("error in <hanlderPolkaWebhook> at jsonDecoder: %v", err)
 		jsonErrorResp(http.StatusInternalServerError, "failed to decode json", w)

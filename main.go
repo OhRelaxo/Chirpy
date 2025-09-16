@@ -17,6 +17,7 @@ type apiConfig struct {
 	db             *database.Queries
 	devMode        bool
 	secret         string
+	polkaKey       string
 }
 
 func main() {
@@ -45,7 +46,9 @@ func main() {
 
 	secret := os.Getenv("JWT_SECRET")
 
-	apiCfg := apiConfig{fileserverHits: atomic.Int32{}, db: dbQueries, devMode: devMode, secret: secret}
+	polkaKey := os.Getenv("POLKA_KEY")
+
+	apiCfg := apiConfig{fileserverHits: atomic.Int32{}, db: dbQueries, devMode: devMode, secret: secret, polkaKey: polkaKey}
 
 	mux := http.NewServeMux()
 
