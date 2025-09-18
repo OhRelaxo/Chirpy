@@ -24,29 +24,7 @@ func main() {
 	const port = "8080"
 	const rootPath = "."
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("error while loading .env: %v", err)
-	}
-
-	devMode := false
-	if dev := os.Getenv("PLATFORM"); dev == "Dev" {
-		devMode = true
-	}
-
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		log.Fatal("DB_URL must be set")
-	}
-	db, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		log.Fatal(err)
-	}
-	dbQueries := database.New(db)
-
-	secret := os.Getenv("JWT_SECRET")
-
-	polkaKey := os.Getenv("POLKA_KEY")
+	dbQueries, devMode, secret, polkaKey := getApiCfg()
 
 	apiCfg := apiConfig{fileserverHits: atomic.Int32{}, db: dbQueries, devMode: devMode, secret: secret, polkaKey: polkaKey}
 
@@ -83,12 +61,30 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func handlerReadiness(w http.ResponseWriter, _ *http.Request) {
-	log.Println("the server is Ready")
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, err := w.Write([]byte(http.StatusText(http.StatusOK)))
+func getApiCfg() (dbQueries *database.Queries, devMode bool, secret, polkaKey string) {
+	err := godotenv.Load()
 	if err != nil {
-		log.Printf("error in <handlerReadiness> at w.Write: %v", err)
+		log.Fatalf("error while loading .env: %v", err)
 	}
+
+	devMode = false
+	if dev := os.Getenv("PLATFORM"); dev == "Dev" {
+		devMode = true
+	}
+
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
+
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dbQueries = database.New(db)
+	secret = os.Getenv("JWT_SECRET")
+	polkaKey = os.Getenv("POLKA_KEY")
+
+	return dbQueries, devMode, polkaKey, secret
 }
